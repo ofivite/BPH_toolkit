@@ -1,22 +1,45 @@
 from DataExplorer import DataExplorer
 import ROOT
+from ROOT import RooFit as RF
 
+N_GEN = 2000 # number of events to generate
+SIG_FRACTION = 0.05
+chi2_results = {}
 
 # Observable
-m = ROOT.RooRealVar("m", "m", 5.20, 5.30)
+m = ROOT.RooRealVar("m", "m", 5.2, 5.3)
+m.setBins(50)
 
-# Parameters
-m0 = ROOT.RooRealVar("m0", "m0", 5.291, 5.20, 5.30)
-k = ROOT.RooRealVar("k", "k", -30, -50, -10)
+# Parameters (you can tune them)
+exp_par = ROOT.RooRealVar("exp_par", "exp_par", -30, -50, -10)
+mean = ROOT.RooRealVar("mean", "", 5.25, 5.2, 5.3)
+sigma = ROOT.RooRealVar("sigma", "", 0.005, 0.001, 0.05)
 
-# PDF
-argus = ROOT.RooArgusBG("argus", "argus", m, m0, k)
+fraction = ROOT.RooRealVar('fraction', 'fraction', SIG_FRACTION)  # used only for data generation here
+N_sig = ROOT.RooRealVar('N_sig', '', 100, 0, N_GEN)
+N_bkgr = ROOT.RooRealVar('N_bkgr', '', 1000., 0, N_GEN)
+
+# PDFs (note labelling for correct plotting)
+sig = ROOT.RooGaussian("sig", "sig", m, mean, sigma)
+bkgr = ROOT.RooExponential("bkgr", "bkgr", m, exp_par)
+model_gen = ROOT.RooAddPdf("model_gen", "model_gen", ROOT.RooArgList(sig, bkgr), ROOT.RooArgList(fraction))
+model = ROOT.RooAddPdf('model', 'model', ROOT.RooArgList(sig, bkgr), ROOT.RooArgList(N_sig, N_bkgr))
 
 # Sample 1000 events
-data = argus.generate(ROOT.RooArgSet(m), 1000)
+data = model_gen.generate(ROOT.RooArgSet(m), N_GEN)
+data.reduce(f'{m.GetName()} > {m.getMin()} && {m.GetName()} < {m.getMax()}')
 
-c = ROOT.TCanvas()
-DE = DataExplorer(label='test', data=data, model=argus)
+# Study and plot'em all
+DE = DataExplorer(label='test', data=data, model=model)
 fit_results = DE.fit(is_sum_w2=False)
+c = ROOT.TCanvas()
 frame = DE.plot_on_frame()
 frame.Draw()
+
+# Calculate statistical significance of signal observation
+w = DE.prepare_workspace(poi=N_sig, nuisances= [exp_par, mean, sigma, N_bkgr])
+asympt_rrr = DE.asympt_signif(w=w)
+# DE.asympt_signif_ll(w=w) # another method
+chi2_results = list(DE.chi2_test(pvalue_threshold=0.05).values())[0]
+print(f'\n\n\nchi2: {chi2_results[0]}\nndf: {chi2_results[1]}\np-value of chi2 test: {chi2_results[2]}\n')
+print(f'fit status: {DE.fit_status}, chi2_test status: {DE.chi2_test_status}')
