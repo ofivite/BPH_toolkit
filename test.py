@@ -25,22 +25,22 @@ bkgr = ROOT.RooExponential("bkgr", "bkgr", m, exp_par)
 model_gen = ROOT.RooAddPdf("model_gen", "model_gen", ROOT.RooArgList(sig, bkgr), ROOT.RooArgList(fraction))
 model = ROOT.RooAddPdf('model', 'model', ROOT.RooArgList(sig, bkgr), ROOT.RooArgList(N_sig, N_bkgr))
 
-# Sample 1000 events
+# Sample N_GEN events
 data = model_gen.generate(ROOT.RooArgSet(m), N_GEN)
 data.reduce(f'{m.GetName()} > {m.getMin()} && {m.GetName()} < {m.getMax()}')
 
 # Study and plot'em all
 DE = DataExplorer(label='test', data=data, model=model)
-fit_results = DE.fit(is_sum_w2=False)
+fit_results = DE.chi2_fit(nbins = 50)
 c = ROOT.TCanvas()
-frame = DE.plot_on_frame()
+frame = DE.plot_on_frame(nbins=-1)
 frame.Draw()
 
 # Calculate statistical significance of signal observation
 w = DE.write_to_workspace(poi=N_sig, nuisances= [exp_par, mean, sigma, N_bkgr])
-asympt_rrr = DE.asympt_signif_ll(w=w)
+# asympt_rrr = DE.asympt_signif_ll(w=w)
 # DE.asympt_signif_ll(w=w) # another method
-chi2_results = list(DE.chi2_test(pvalue_threshold=0.05).values())[0]
+chi2_results = list(DE.chi2_test(pvalue_threshold=0.05, nbins=-1).values())[0]
 print(f'\n\nchi2: {chi2_results[0]}\nndf: {chi2_results[1]}\np-value of chi2 test: {chi2_results[2]}\n')
 print(f'fit status: {DE.fit_status}, chi2_test status: {DE.chi2_test_status}')
 

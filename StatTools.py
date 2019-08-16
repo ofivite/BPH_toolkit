@@ -9,9 +9,9 @@ class StatTools:
     """Additional to DataExplorer module for performing statistical inference.
     """
 
-    def chi2_test(self, pvalue_threshold = 0.05):
+    def chi2_test(self, pvalue_threshold = 0.05, nbins = -1):
         """Make goodness-of-fit chi2 test between the instance's data and model.
-        NB: binning is taken from the variable's definition.
+        NB: by default, binning is taken from the variable's definition. Otherwise, it is temporarily set to nbins value.
 
         Parameters
         ----------
@@ -19,10 +19,17 @@ class StatTools:
         pvalue_threshold: float, optional (default=0.05)
             threshold for setting boolean flag self.chi2_test_status (pass/fail chi2 test)
 
+        nbins: int/float, optional (default=-1: take the number of bins from the variable's definition)
+            number of bins in calculating chi2
+
         Returns
         -------
         dict: Python dictionary with chi2, ndf and p-value of the test.
         """
+        init_nbins = self.var.numBins()
+        if nbins != -1:
+            assert (nbins % 1 == 0 and nbins >= 0), 'nbins type is not a positive integer'
+            self.var.setBins(nbins)
         if not self.is_fitted:
             raise Exception('Model was not fitted to data, fit it first.')
         is_extended = self.model.canBeExtended()
@@ -33,6 +40,7 @@ class StatTools:
         chi2_value = chi2_var.getVal()
         pvalue = 1 - chi2.cdf(chi2_value, ndf)
         self.chi2_test_status = 0 if pvalue > pvalue_threshold else 1
+        self.var.setBins(init_nbins)
         return {f'{self.label}_{self.data.GetName()}': [chi2_value, ndf, pvalue]}
 
     @classmethod

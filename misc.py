@@ -1,5 +1,6 @@
 def interactivity_yn(message):
-    """Interact with the user by printing the message and then suggesting to choose between yes or no. If 'no' is typed, exit the program. if 'yes' - continue running.
+    """Interact with the user by printing the message and then suggesting to choose between yes or no.
+     If 'no' is typed, exit the program. if 'yes' - continue running.
 
     Parameters
     ----------

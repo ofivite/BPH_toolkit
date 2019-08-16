@@ -3,7 +3,8 @@
 #
 # exception handling
 # private/protected items
-# is is_sum_w2 redundant?
+# more tests?
+# minos to unbinned fit?
 
 import ROOT
 from ROOT import RooFit as RF
@@ -106,13 +107,13 @@ class DataExplorer(StatTools):
             frame.addObject(line)
         return frame
 
-    def fit(self, is_sum_w2, fix = [], fix_float=[]):
+    def fit(self, is_sum_w2=-1, fix=[], fix_float=[]):
         """Fit instance data with instance model using fitTo() method. Extended or not is infered from the model. Set is_fitted=True.
         NB: the corresponding model parameters will be updated outside of the class instance after executing!
 
         Parameters
         ----------
-        is_sum_w2: bool
+        is_sum_w2: bool, optional (default=-1: True if data is weighed and False otherwise)
             correct Hessian with data weights matrix to get correct errors, see RooFit tutorial rf403__weightedevts
         fix: list of RooRealVar, optional (default=[])
             variables from this list will be fixed in the fit and then released
@@ -123,7 +124,10 @@ class DataExplorer(StatTools):
         -------
         fit_results: RooFitResult
         """
+        if is_sum_w2 != -1:
+            assert (type(is_sum_w2) is bool), 'is_sum_w2 is not boolean, set it to either True or False'
         is_extended = self.model.canBeExtended()
+        is_sum_w2 = self.data.isWeighted() if is_sum_w2 == -1 else is_sum_w2
         for param in fix:
             param.setConstant(1)
         self.model.fitTo(self.data, RF.Extended(is_extended), RF.SumW2Error(is_sum_w2))
@@ -140,15 +144,19 @@ class DataExplorer(StatTools):
         self.is_fitted = True
         self.fit_status = fit_results.status()
         if is_sum_w2:
-            print('\n\n' + 70*'~' + '\n' + ' '*30 + 'BEWARE!\n\nErrors might differ between two printed tables!\nThe last one from RooFitResult.Print() should be correct.\nYou might also want to consider chi2_fit() method as a cross-check,\nas in principle, that should give correct and more reliable results\n(but the normalization in this case will likely not be preserved \nand results might be unstable)\n' + 70*'~' + '\n\n')
+            print('\n\n' + 70*'~' + '\n' + ' '*30 + 'BEWARE!\n\nYou set is_sum_w2=True, which means that the data might be weighted.\nErrors might differ between two printed tables!\nThe last one from RooFitResult.Print() should be correct.\nYou might also want to consider chi2_fit() method as a cross-check,\nas in principle, that should give correct and more reliable results\n(but the normalization in this case will likely not be preserved \nand results might be unstable)\n' + 70*'~' + '\n\n')
         return fit_results
 
-    def chi2_fit(self, fix_float=[], minos = False, poi = None):
-        """Fit the instance data with binned chi2 method using Minuit2. Set is_fitted=True
+    def chi2_fit(self, nbins=-1, fix_float=[], minos = False, poi = None):
+        """Fit the instance data with binned chi2 method using Minuit2. Set is_fitted=True.
         NB: weights presence is taken care of automatically
+        NB: by default, binning is taken from the variable's definition. Otherwise, it is temporarily set to nbins value.
 
         Parameters
         ----------
+
+        nbins: int/float, optional (default=-1: take the number of bins from the variable's definition)
+            number of bins in calculating chi2
 
         fix_float: list of RooRealVar, optional (default=[])
         variables from this list will be firstly setConstant(1) in the fit and then setConstant(0)
@@ -163,10 +171,15 @@ class DataExplorer(StatTools):
         -------
         self, object
         """
+        init_nbins = self.var.numBins()
+        if nbins != -1:
+            assert (nbins % 1 == 0 and nbins >= 0), 'nbins type is not a positive integer'
+            self.var.setBins(nbins)
         hist_to_fit = ROOT.RooDataHist('hist_to_fit', 'hist_to_fit', ROOT.RooArgSet(self.var), self.data) ### binning is taken from the var's definition
         is_extended = self.model.canBeExtended()
-        chi = ROOT.RooChi2Var("chi","chi", self.model, hist_to_fit, RF.Extended(is_extended), RF.DataError(ROOT.RooAbsData.Auto))
-        m = ROOT.RooMinimizer(chi)
+        chi2_var = ROOT.RooChi2Var("chi2_var","chi2_var", self.model, hist_to_fit, RF.Extended(is_extended), RF.DataError(ROOT.RooAbsData.Auto))
+
+        m = ROOT.RooMinimizer(chi2_var)
         m.setMinimizerType("Minuit2")
         m.setPrintLevel(3)
         m.minimize("Minuit2","minimize")
@@ -177,31 +190,37 @@ class DataExplorer(StatTools):
             param.setConstant(0)
         self.fit_status = m.minimize("Minuit2","minimize")
         self.is_fitted = True
+        self.var.setBins(init_nbins)
         if minos:
             if poi is None:
                 raise TypeError('Poi is None by default: set it to a proper variable to run MINOS.')
             if self.data.isWeighted():
                 interactivity_yn('The data is weighted and MINOS should not be used. Sure you want to proceed?')
             m.minos(ROOT.RooArgSet(poi))
+            print('\n\n\nMINOS DONE, see the results above\n\n\n')
         return m.save()
 
-    def plot_on_frame(self, title=' ', plot_params=ROOT.RooArgSet(), **kwargs):
+    def plot_on_frame(self, title=' ', plot_params=ROOT.RooArgSet(), nbins=-1, **kwargs):
         """Plot the instance model with all its components and data on the RooPlot frame
-        NB: signal component's name should starts with 'sig_', background - with 'bkgr_'
+        NB: signal component's name should starts with 'sig', background - with 'bkgr'
         Parameters
         ----------
         title: str, optional (default=' ')
             title for a RooPlot frame
         plot_params: RooArgSet, optional (default=RooArgSet)
             Set of parameters to be shown on the legend
+        nbins: int/float, optional (default=-1, meaning that take the number of bins from the variable's definition)
+            number of bins in the histogram for plotting
 
         Returns
         -------
         frame: RooPlot
         """
+        if nbins != -1:
+            assert (nbins % 1 == 0 and nbins >= 0), 'nbins type is not positive integer'
         var_left  = self.var.getMin();
         var_right = self.var.getMax();
-        var_nbins = self.var.numBins()
+        var_nbins = self.var.numBins() if nbins == -1 else nbins
 
         frame = ROOT.RooPlot(" ", title, self.var, var_left, var_right, var_nbins)  # frame.getAttText().SetTextSize(0.053)
         self.data.plotOn(frame, RF.DataError(ROOT.RooAbsData.Auto))
@@ -214,9 +233,9 @@ class DataExplorer(StatTools):
         iter = self.model.getComponents().iterator()
         iter_comp = iter.Next()
         while iter_comp:
-            if iter_comp.GetName().startswith('sig_'):
+            if iter_comp.GetName().startswith('sig'):
                 self.model.plotOn(frame, RF.Components(iter_comp.GetName()), RF.LineStyle(ROOT.kDashed), RF.LineColor(47), RF.LineWidth(4))
-            if iter_comp.GetName().startswith('bkgr_'):
+            if iter_comp.GetName().startswith('bkgr'):
                 self.model.plotOn(frame, RF.Components(iter_comp.GetName()), RF.LineStyle(ROOT.kDashed), RF.LineColor(ROOT.kBlue-8), RF.LineWidth(4))
             iter_comp = iter.Next()
 
@@ -226,7 +245,7 @@ class DataExplorer(StatTools):
             assert (len(range) == 2), 'N elements in range != 2'
             self.model.plotOn(frame, RF.Components(component_name), RF.LineStyle(ROOT.kDashed), RF.LineColor(ROOT.kGreen-5), RF.LineWidth(4), RF.Normalization(1.0), RF.Name(component_name), RF.Range(*range))
 
-        frame.GetYaxis().SetTitle(f'Candidates / {round((var_right - var_left) * 1000. / var_nbins, 1)} MeV')
+        frame.GetYaxis().SetTitle(f'Candidates / {round((var_right - var_left) * 1000. / var_nbins, 2)} MeV')
         frame.GetXaxis().SetTitleSize(0.04)
         frame.GetYaxis().SetTitleSize(0.04)
         frame.GetXaxis().SetLabelSize(0.033)
