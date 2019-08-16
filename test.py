@@ -2,7 +2,7 @@ from DataExplorer import DataExplorer
 import ROOT
 from ROOT import RooFit as RF
 
-N_GEN = 2000 # number of events to generate
+N_GEN = 1000 # number of events to generate
 SIG_FRACTION = 0.05
 chi2_results = {}
 
@@ -37,9 +37,13 @@ frame = DE.plot_on_frame()
 frame.Draw()
 
 # Calculate statistical significance of signal observation
-w = DE.prepare_workspace(poi=N_sig, nuisances= [exp_par, mean, sigma, N_bkgr])
-asympt_rrr = DE.asympt_signif(w=w)
+w = DE.write_to_workspace(poi=N_sig, nuisances= [exp_par, mean, sigma, N_bkgr])
+asympt_rrr = DE.asympt_signif_ll(w=w)
 # DE.asympt_signif_ll(w=w) # another method
 chi2_results = list(DE.chi2_test(pvalue_threshold=0.05).values())[0]
-print(f'\n\n\nchi2: {chi2_results[0]}\nndf: {chi2_results[1]}\np-value of chi2 test: {chi2_results[2]}\n')
+print(f'\n\nchi2: {chi2_results[0]}\nndf: {chi2_results[1]}\np-value of chi2 test: {chi2_results[2]}\n')
 print(f'fit status: {DE.fit_status}, chi2_test status: {DE.chi2_test_status}')
+
+# c_ll = ROOT.TCanvas()
+# frame_ll = DE.plot_ll(N_sig)
+# frame_ll.Draw()
