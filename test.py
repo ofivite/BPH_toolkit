@@ -3,7 +3,7 @@ import ROOT
 from ROOT import RooFit as RF
 
 N_GEN = 1000 # number of events to generate
-SIG_FRACTION = 0.1
+SIG_FRACTION = 0.1 # fraction of the signal component
 chi2_results = {}
 
 # Observable
@@ -62,3 +62,8 @@ c_error = ROOT.TCanvas()
 frame_err.Draw()
 c_pull = ROOT.TCanvas()
 frame_pull.Draw()
+
+# Calculate signal significance with toys
+c_toy_signif = ROOT.TCanvas()
+frame_toy_signif, _ = DE.toy_signif(w, n_toys_null = 100, n_toys_alt=10)
+frame_toy_signif.Draw()

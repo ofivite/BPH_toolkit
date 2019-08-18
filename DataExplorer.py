@@ -7,6 +7,7 @@
 # minos to unbinned fit method
 # method for reducing data + making self.data private
 # proper plot labelling of params
+# make it an open source project? (pip repo, dependencies, etc.)
 
 import ROOT
 from ROOT import RooFit as RF
@@ -160,13 +161,10 @@ class DataExplorer(StatTools):
         ----------
         nbins: int/float, optional (default=-1: take the number of bins from the variable's definition)
             number of bins in calculating chi2
-
         fix_float: list of RooRealVar, optional (default=[])
-        variables from this list will be firstly setConstant(1) in the fit and then setConstant(0)
-
+            variables from this list will be firstly setConstant(1) in the fit and then setConstant(0)
         minos: bool
             whether to calculate MINOS errors for POI
-
         minos_poi: RooRealVar
             parameter of interest for which to calculate MINOS errors
 
@@ -203,7 +201,7 @@ class DataExplorer(StatTools):
             print('\n\n\nMINOS DONE, see the results above\n\n\n')
         return m.save()
 
-    def plot_on_frame(self, title=' ', plot_params=ROOT.RooArgSet(), nbins=-1, **kwargs):
+    def plot_on_frame(self, title=' ', plot_params=-1, nbins=-1, **kwargs):
         """Plot the instance model with all its components and data on the RooPlot frame
         NB: signal component's name should starts with 'sig', background - with 'bkgr'
 
@@ -211,7 +209,7 @@ class DataExplorer(StatTools):
         ----------
         title: str, optional (default=' ')
             title for a RooPlot frame
-        plot_params: RooArgSet, optional (default=RooArgSet)
+        plot_params: RooArgSet, optional (default=-1: show all the parameters)
             Set of parameters to be shown on the legend
         nbins: int/float, optional (default=-1: take the number of bins from the variable's definition)
             number of bins in the histogram for plotting
@@ -232,7 +230,7 @@ class DataExplorer(StatTools):
         frame = ROOT.RooPlot(" ", title, self.var, var_left, var_right, var_nbins)  # frame.getAttText().SetTextSize(0.053)
         self.data.plotOn(frame, RF.DataError(ROOT.RooAbsData.Auto))
         self.model.plotOn(frame, RF.LineColor(ROOT.kRed-6), RF.LineWidth(5)) #, RF.NormRange('full'), RF.Range('full')
-        if plot_params.getSize() == 0:
+        if plot_params == -1:
             self.model.paramOn(frame, RF.Layout(0.55, 0.96, 0.9))
         else:
             self.model.paramOn(frame, RF.Layout(0.55, 0.96, 0.9), RF.Parameters(plot_params))
@@ -268,7 +266,6 @@ class DataExplorer(StatTools):
         ----------
         nuisances: list of RooRealVar
             nuisance parameters in statistical inference
-
         poi: RooRealVar
             parameter of interest in statistical inference
 
@@ -295,7 +292,6 @@ class DataExplorer(StatTools):
     def extract_from_workspace(w):
         """Extract data, signal+background and background-only models from a given RooWorkspace.
         Background-only model is taken from the s+b model by setting the parameter of interest to be 0.
-
         NB: naming conventions assume that data's name is 'data', and that the parameter of interest is the first one and corresponds to the signal yield.
 
         Parameters:
@@ -306,16 +302,16 @@ class DataExplorer(StatTools):
         Returns:
         --------
         data, mc_sb, mc_b: RooAbsData, ModelConfig, ModelConfig
-            Tuple with data, s+b and b-only models
+            tuple with data, s+b and b-only models
         """
         data = w.obj("data")
         mc_sb = w.obj("ModelConfig")
         mc_sb.LoadSnapshot() # not sure whether it is useful
-        mc_sb.SetName("mc_sb")
+        mc_sb.SetName("sig+bkgr model")
         poi = mc_sb.GetParametersOfInterest().first()
 
         mc_b = mc_sb.Clone()
-        mc_b.SetName("B_only_model")
+        mc_b.SetName("bkgr only model")
         oldval = poi.getVal()
         poi.setVal(0)
         mc_b.SetSnapshot(ROOT.RooArgSet(poi))
@@ -332,10 +328,8 @@ class DataExplorer(StatTools):
         ----------
         workspaces_dict: dictionary
             dictionary with binding labels and workspaces which carry 'fix from' models
-
         models_dict: dictionary
             dictionary with binding labels and 'to fix' models
-
         var_ignore_list: list of RooRealVar
             parameters of models (e.g. means) which will not be setConstant (but the values will be set to a workspace one)
 
