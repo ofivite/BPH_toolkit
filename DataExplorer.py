@@ -4,7 +4,9 @@
 # exception handling
 # private/protected items
 # more tests?
-# minos to unbinned fit?
+# minos to unbinned fit method
+# method for reducing data + making self.data private
+# proper plot labelling of params
 
 import ROOT
 from ROOT import RooFit as RF
@@ -16,7 +18,6 @@ from StatTools import StatTools
 class DataExplorer(StatTools):
     """Class exploring data-model relationships.
     """
-
     def __init__(self, label, data, model):
         super(DataExplorer, self).__init__()
         assert (type(label) is str), 'Label is not str'
@@ -37,7 +38,6 @@ class DataExplorer(StatTools):
 
         Parameters
         ---------
-
         num_of_sigma_window: float, optional (default=3)
             number of effective sigmas in the window
         num_of_sigma_to_sdb: float, optional (default=2)
@@ -57,6 +57,9 @@ class DataExplorer(StatTools):
 
     def get_regions(self):
         """Reduce instance dataset with SR and SdR cuts
+
+        Parameters
+        ---------
 
         Returns
         -------
@@ -92,6 +95,7 @@ class DataExplorer(StatTools):
         Returns
         -------
         frame: RooPlot
+            intial frame with the lines added  (requires further drawing on the canvas)
         """
         mean = self.model.getParameters(self.data).find(f'mean_{self.label}').getVal()
         line_ll_sdb = (ROOT.TLine(mean - 2.*self.window - self.distance_to_sdb, 0, mean - 2.*self.window - self.distance_to_sdb, y_sdb_left),  ROOT.kBlue-8)
@@ -147,14 +151,13 @@ class DataExplorer(StatTools):
             print('\n\n' + 70*'~' + '\n' + ' '*30 + 'BEWARE!\n\nYou set is_sum_w2=True, which means that the data might be weighted.\nErrors might differ between two printed tables!\nThe last one from RooFitResult.Print() should be correct.\nYou might also want to consider chi2_fit() method as a cross-check,\nas in principle, that should give correct and more reliable results\n(but the normalization in this case will likely not be preserved \nand results might be unstable)\n' + 70*'~' + '\n\n')
         return fit_results
 
-    def chi2_fit(self, nbins=-1, fix_float=[], minos = False, poi = None):
+    def chi2_fit(self, nbins=-1, fix_float=[], minos=False, minos_poi=None):
         """Fit the instance data with binned chi2 method using Minuit2. Set is_fitted=True.
         NB: weights presence is taken care of automatically
         NB: by default, binning is taken from the variable's definition. Otherwise, it is temporarily set to nbins value.
 
         Parameters
         ----------
-
         nbins: int/float, optional (default=-1: take the number of bins from the variable's definition)
             number of bins in calculating chi2
 
@@ -164,7 +167,7 @@ class DataExplorer(StatTools):
         minos: bool
             whether to calculate MINOS errors for POI
 
-        poi: RooRealVar
+        minos_poi: RooRealVar
             parameter of interest for which to calculate MINOS errors
 
         Returns
@@ -192,35 +195,39 @@ class DataExplorer(StatTools):
         self.is_fitted = True
         self.var.setBins(init_nbins)
         if minos:
-            if poi is None:
+            if minos_poi is None:
                 raise TypeError('Poi is None by default: set it to a proper variable to run MINOS.')
             if self.data.isWeighted():
                 interactivity_yn('The data is weighted and MINOS should not be used. Sure you want to proceed?')
-            m.minos(ROOT.RooArgSet(poi))
+            m.minos(ROOT.RooArgSet(minos_poi))
             print('\n\n\nMINOS DONE, see the results above\n\n\n')
         return m.save()
 
     def plot_on_frame(self, title=' ', plot_params=ROOT.RooArgSet(), nbins=-1, **kwargs):
         """Plot the instance model with all its components and data on the RooPlot frame
         NB: signal component's name should starts with 'sig', background - with 'bkgr'
+
         Parameters
         ----------
         title: str, optional (default=' ')
             title for a RooPlot frame
         plot_params: RooArgSet, optional (default=RooArgSet)
             Set of parameters to be shown on the legend
-        nbins: int/float, optional (default=-1, meaning that take the number of bins from the variable's definition)
+        nbins: int/float, optional (default=-1: take the number of bins from the variable's definition)
             number of bins in the histogram for plotting
 
         Returns
         -------
         frame: RooPlot
+             frame with data and model plotted (requires further drawing on the canvas)
         """
-        if nbins != -1:
+        if nbins == -1:
+            var_nbins = self.var.numBins()
+        else:
             assert (nbins % 1 == 0 and nbins >= 0), 'nbins type is not positive integer'
+            var_nbins = nbins
         var_left  = self.var.getMin();
         var_right = self.var.getMax();
-        var_nbins = self.var.numBins() if nbins == -1 else nbins
 
         frame = ROOT.RooPlot(" ", title, self.var, var_left, var_right, var_nbins)  # frame.getAttText().SetTextSize(0.053)
         self.data.plotOn(frame, RF.DataError(ROOT.RooAbsData.Auto))
@@ -259,7 +266,6 @@ class DataExplorer(StatTools):
 
         Parameters
         ----------
-
         nuisances: list of RooRealVar
             nuisance parameters in statistical inference
 
@@ -294,7 +300,6 @@ class DataExplorer(StatTools):
 
         Parameters:
         -----------
-
         w, RooWorkspace
             workspace with saved data and s+b model to unpack
 
@@ -325,7 +330,6 @@ class DataExplorer(StatTools):
 
         Parameters
         ----------
-
         workspaces_dict: dictionary
             dictionary with binding labels and workspaces which carry 'fix from' models
 

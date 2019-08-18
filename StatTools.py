@@ -8,14 +8,12 @@ from math import sqrt
 class StatTools:
     """Additional to DataExplorer module for performing statistical inference.
     """
-
-    def chi2_test(self, pvalue_threshold = 0.05, nbins = -1):
+    def chi2_test(self, pvalue_threshold=0.05, nbins=-1):
         """Make goodness-of-fit chi2 test between the instance's data and model.
         NB: by default, binning is taken from the variable's definition. Otherwise, it is temporarily set to nbins value.
 
         Parameters
         ----------
-
         pvalue_threshold: float, optional (default=0.05)
             threshold for setting boolean flag self.chi2_test_status (pass/fail chi2 test)
 
@@ -28,7 +26,7 @@ class StatTools:
         """
         init_nbins = self.var.numBins()
         if nbins != -1:
-            assert (nbins % 1 == 0 and nbins >= 0), 'nbins type is not a positive integer'
+            assert (nbins % 1 == 0 and nbins >= 0), 'nbins must be a positive integer'
             self.var.setBins(nbins)
         if not self.is_fitted:
             raise Exception('Model was not fitted to data, fit it first.')
@@ -49,7 +47,6 @@ class StatTools:
 
         Parameters
         ----------
-
         w: RooWorkspace
             Workspace containing data and model to be opened. Usage of the method extract_from_workspace is assumed.
 
@@ -71,6 +68,7 @@ class StatTools:
     def asympt_signif_ll(cls, w):
         """Function to calculate one-sided significance for a given in the workspace s+b model by bare hands (through likelihoods). Might be useful as a cross-check to asympt_signif().
         NB: this gives more control on fitting than AsymptoticCalculator
+
         Parameters
         ----------
 
@@ -181,62 +179,133 @@ class StatTools:
         df.to_pickle('t_.pkl')
         return df
 
-    def plot_ll(self, save=False, save_prefix = ''):
+    def plot_ll(self, poi, nbins=100, poi_min=-1, poi_max=-1, save=False, save_folder='.', save_prefix='pll'):
+        """Plot the nominal and profiled likelihoods for the instance's data and model for the provided parameter of interest
+
+        Parameters
+        ----------
+        poi: RooRealVar
+            parameter of interest for which the likelihoods will be plotted
+        nbins: int, optional (default=100)
+            number of bins for plotting
+        poi_min: float, optional (default=-1, set to be -5*poi_fit_error)
+            left range for plotting
+        poi_max: float, optional (default=-1, set to be +5*poi_fit_error)
+            right range for plotting
+        save: bool, optional (default=False)
+            whether save the plot or not
+        save_folder: str, optional (default='.')
+            path for saving
+        save_prefix: str, optional (default='pll')
+            prefix to the file name
+
+        Returns
+        -------
+        frame: RooPlot
+            frame containing the likelihood plots (requires further drawing on the canvas)
+        """
+        poi_from_model = self.model.getVariables().find(poi.GetName())
+        if poi_min == -1: poi_min = poi_from_model.getVal() - 5*poi_from_model.getError();
+        if poi_max == -1: poi_max = poi_from_model.getVal() + 5*poi_from_model.getError();
+        assert (nbins % 1 == 0 and nbins >= 0), 'nbins must be a positive integer'
+        assert (poi_min < poi_max), 'left range value must be lower than right range one'
+        
         nll = self.model.createNLL(self.data)
-        pll = nll.createProfile(ROOT.RooArgSet(self.poi))
-        #
-        frame_nll = self.poi.frame(RF.Bins(100), RF.Range(ll_left, ll_right))
+        pll = nll.createProfile(ROOT.RooArgSet(poi))
+        frame_nll = poi.frame(RF.Bins(nbins), RF.Range(poi_min, poi_max))
         frame_nll.SetTitle('')
-        #
         nll.plotOn(frame_nll, RF.ShiftToZero(), RF.LineColor(ROOT.kGreen))
         pll.plotOn(frame_nll, RF.LineColor(ROOT.kRed))
-        #
         frame_nll.SetMaximum(25.)
         frame_nll.SetMinimum(0.)
+        frame_nll.SetXTitle(poi.GetName())
         if save:
-            c_ll = ROOT.TCanvas("c_ll", "c_ll", 800, 600); ll_left = 0; ll_right = 200
+            c_ll = ROOT.TCanvas("c_ll", "c_ll", 800, 600)
             frame_nll.Draw()
-            #
-            line_width = 4
-            line_5sigma = ROOT.TLine(ll_left, 12.5, ll_right, 12.5)
-            line_5sigma.SetLineWidth(line_width); line_5sigma.SetLineColor(47)
-            line_5sigma.Draw();
-            #
-            c_ll.SaveAs(f'{save_prefix}1_pll.pdf')
+            c_ll.SaveAs(f'{save_folder}/{save_prefix}.pdf')
         return frame_nll
 
-    def plot_pull(self, save=False, save_path='./fit_validation/', save_prefix = ''):
+    def plot_pull(self, save=False, save_folder='.', save_prefix='pull'):
+        """Plot the pull between data and model.
+
+        Parameters
+        ----------
+        save: bool, optional (default=False)
+            whether save the plot or not
+        save_folder: str, optional (default='.')
+            path for saving
+        save_prefix: str, optional (default='pull')
+            prefix to the file name
+
+        Returns
+        -------
+        frame: RooPlot
+            frame containing the pull plot (requires further drawing on the canvas)
+        """
         frame = self.var.frame()
         self.data.plotOn(frame)
         self.model.plotOn(frame)
         pull_hist = frame.pullHist()
-        #
         frame_pull = self.var.frame()
         frame_pull.addPlotable(pull_hist, 'P')
+
+        line_null = ROOT.TLine(self.var.getMin(), 0, self.var.getMax(), 0)
+        line_null.SetLineColor(ROOT.kRed-6);
+        line_null.SetLineWidth(4);
+        frame_pull.addObject(line_null)
+        if frame_pull.GetMaximum() > 4:
+            line_plus_3sigma = ROOT.TLine(self.var.getMin(), 3, self.var.getMax(), 3)
+            line_plus_3sigma.SetLineColor(ROOT.kRed-6);
+            line_plus_3sigma.SetLineWidth(4);
+            line_plus_3sigma.SetLineStyle(2);
+            frame_pull.addObject(line_plus_3sigma)
+        if frame_pull.GetMinimum() < -4:
+            line_minus_3sigma = ROOT.TLine(self.var.getMin(), -3, self.var.getMax(), -3)
+            line_minus_3sigma.SetLineWidth(4)
+            line_minus_3sigma.SetLineColor(ROOT.kRed-6)
+            line_minus_3sigma.SetLineStyle(2)
+            frame_pull.addObject(line_minus_3sigma)
         if save:
             c_pull = ROOT.TCanvas("c_pull", "c_pull", 800, 600)
             frame_pull.Draw()
-            c_pull.SaveAs(f'{save_path}{save_prefix}_{self.data.GetName()}.pdf')
+            c_pull.SaveAs(f'{save_folder}/{save_prefix}_{self.var.GetName()}.pdf')
         return frame_pull
 
-    def plot_toys_pull(self, var_to_study, N_toys=100, N_gen=1, save=False, save_path='./fit_validation/', save_prefix = ''):
-        """Make bias checks in fitted model parameter var_to_study by generating toys with RooMCStudy()
+    def check_fit_bias(self, var_to_study, N_toys=1000, save=False, save_folder='.', save_prefix='bias_check'):
+        """Using RooMCStudy() class make bias checks in fitted model's parameter var_to_study by repitative sampling of toys from the model and then fitting them.
+        Normally, if mean or sigma of pull plot (should look like Gaussian) are within 3sigma from 0 and 1 respectively, the fit is not biased.
+        NB: Fit extendability and weights presence are taken into account automatically.
+
+        Parameters
+        ----------
+        var_to_study: RooRealVar
+            variable for which the fit results will be accumulated
+        N_toys: int, optional (default=1000)
+            number of toy samples to be generated
+        save: bool, optional (default=False)
+            whether save the plot or not
+        save_folder: str, optional (default='.')
+            path for saving
+        save_prefix: str, optional (default='bias_check')
+            prefix to the file name
+
+        Returns
+        -------
+        frame: RooPlot, RooPlot, RooPlot
+            frames with distributions for variable's fitted value, error and pull respectively (requires further drawing on the canvas)
         """
         if not self.is_fitted:
             raise Exception('Model was not fitted to data, fit it first.')
+        is_extended = self.model.canBeExtended()
+        is_sum_w2 = self.data.isWeighted()
+        MC_manager = ROOT.RooMCStudy(self.model, ROOT.RooArgSet(self.var), RF.Extended(is_extended), RF.SumW2Error(is_sum_w2)) #, RF.FitOptions(RF.Extended(is_extended), RF.SumW2Error(is_sum_w2))
+        MC_manager.generateAndFit(N_toys)
 
-        # width_N = 80 if self.mode == 'X' else 250
-        # err_upper = 30 if self.mode == 'X' else 400; err_nbins = 30
-        # var_lower = var_to_study.getVal() - width_N; var_upper = var_to_study.getVal() + width_N; var_nbins = 50
-        #
-        MC_manager = ROOT.RooMCStudy(self.model, ROOT.RooArgSet(self.var), RF.Extended(True), RF.FitOptions('mvl'))
-        MC_manager.generateAndFit(N_toys, N_gen)
-        #
-        frame_var = var_to_study.frame() #var_lower, var_upper, var_nbins
+        frame_var = var_to_study.frame()
         MC_manager.plotParamOn(frame_var)
         frame_err = MC_manager.plotError(var_to_study)
         frame_pull = MC_manager.plotPull(var_to_study, -3, 3, 60, ROOT.kTRUE)
-        #
+
         if save:
             c_var = ROOT.TCanvas("c_var", "c_var", 800, 600)
             frame_var.Draw()
@@ -244,8 +313,7 @@ class StatTools:
             frame_err.Draw()
             c_pull = ROOT.TCanvas("c_pull", "c_pull", 800, 600)
             frame_pull.Draw()
-            #
-            c_var. SaveAs(f'{save_path}{save_prefix}_{self.var.GetName()}.pdf')
-            c_err. SaveAs(f'{save_path}{save_prefix}_{self.var.GetName()}err.pdf')
-            c_pull.SaveAs(f'{save_path}{save_prefix}_{self.var.GetName()}pull.pdf')
-        return MC_manager
+            c_var. SaveAs(f'{save_folder}/{save_prefix}_{self.var.GetName()}.pdf')
+            c_err. SaveAs(f'{save_folder}/{save_prefix}_{self.var.GetName()}err.pdf')
+            c_pull.SaveAs(f'{save_folder}/{save_prefix}_{self.var.GetName()}pull.pdf')
+        return frame_var, frame_err, frame_pull

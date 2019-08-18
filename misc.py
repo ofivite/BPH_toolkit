@@ -4,7 +4,6 @@ def interactivity_yn(message):
 
     Parameters
     ----------
-
     message, str
         message to be printed
     """
