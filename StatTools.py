@@ -6,7 +6,7 @@ from pandas import DataFrame
 from math import sqrt
 
 class StatTools:
-    """Additional to DataExplorer module for performing statistical inference.
+    """Additional to DataExplorer module with methods for performing statistical inference.
     """
     def chi2_test(self, pvalue_threshold=0.05, nbins=-1):
         """Make goodness-of-fit chi2 test between the instance's data and model.
@@ -295,14 +295,14 @@ class StatTools:
             c_pull.SaveAs(f'{save_folder}/{save_prefix}_{self.var.GetName()}.pdf')
         return frame_pull
 
-    def check_fit_bias(self, var_to_study, N_toys=1000, verbose=False, save=False, save_folder='.', save_prefix='bias_check'):
-        """Using RooMCStudy() class make bias checks in fitted model's parameter var_to_study by repitative sampling of toys from the model and then fitting them.
+    def check_fit_bias(self, param_to_study, N_toys=1000, verbose=False, save=False, save_folder='.', save_prefix='bias_check'):
+        """Using RooMCStudy() class make bias checks in fitted model's parameter param_to_study by repitative sampling of toys from the model and then fitting them.
         Normally, if mean or sigma of pull plot (should look like Gaussian) are within 3sigma from 0 and 1 respectively, the fit is not biased.
         NB: Fit extendability and weights presence are taken into account automatically.
 
         Parameters
         ----------
-        var_to_study: RooRealVar
+        param_to_study: RooRealVar
             variable for which the fit results will be accumulated
         N_toys: int, optional (default=1000)
             number of toy samples to be generated
@@ -327,10 +327,10 @@ class StatTools:
         MC_manager = ROOT.RooMCStudy(self.model, ROOT.RooArgSet(self.var), RF.Extended(is_extended), RF.FitOptions(RF.SumW2Error(is_sum_w2), RF.Verbose(verbose)))
         MC_manager.generateAndFit(N_toys)
 
-        frame_var = var_to_study.frame()
+        frame_var = param_to_study.frame()
         MC_manager.plotParamOn(frame_var)
-        frame_err = MC_manager.plotError(var_to_study)
-        frame_pull = MC_manager.plotPull(var_to_study, -3, 3, 60, ROOT.kTRUE)
+        frame_err = MC_manager.plotError(param_to_study)
+        frame_pull = MC_manager.plotPull(param_to_study, -3, 3, 60, ROOT.kTRUE)
 
         if save:
             c_var = ROOT.TCanvas("c_var", "c_var", 800, 600)

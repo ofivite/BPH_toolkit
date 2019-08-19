@@ -6,8 +6,10 @@
 # more tests?
 # minos to unbinned fit method
 # method for reducing data + making self.data private
-# proper plot labelling of params
+# proper plot labelling of params in the legend
 # make it an open source project? (pip repo, dependencies, etc.)
+# Kolmogorov-Smirnov test
+
 
 import ROOT
 from ROOT import RooFit as RF
@@ -18,6 +20,16 @@ from StatTools import StatTools
 
 class DataExplorer(StatTools):
     """Class exploring data-model relationships.
+
+    Parameters
+    ----------
+
+    label, str
+        label for accessing the signal model's parameters and naming of some output. It's assumed that for a Gaussian signal model (or a mixture of thereof) mean, sigma and Gaussian components fraction are labelled as <mean/sigma/fr>_<label>_<1/2/3...>
+    data, RooAbsData
+        data to be studied
+    model, RooAbsPdf
+        model to be applied to the data
     """
     def __init__(self, label, data, model):
         super(DataExplorer, self).__init__()
@@ -30,7 +42,7 @@ class DataExplorer(StatTools):
         self.fit_status = -999
         self.chi2_test_status = -999
 
-    def set_regions(self, num_of_sigma_window=3, num_of_sigma_to_sdb=2):
+    def set_regions(self, num_of_sigma_window=3, num_of_sigma_to_sdr=2):
         """Set signal region (SR) window and distance to sidebands (SdR)
             SR=|m - mean| < window;
             SdR=|m - mean| > window + distance_to_sdb &
@@ -41,7 +53,7 @@ class DataExplorer(StatTools):
         ---------
         num_of_sigma_window: float, optional (default=3)
             number of effective sigmas in the window
-        num_of_sigma_to_sdb: float, optional (default=2)
+        num_of_sigma_to_sdr: float, optional (default=2)
             number of effective sigmas in between SR and SdR
 
         Returns
@@ -53,11 +65,11 @@ class DataExplorer(StatTools):
         sigma_2 = self.model.getVariables().find(f'sigma_{self.label}_2').getVal()
         sigma_eff = sqrt(fr*sigma_1**2 + (1-fr)*sigma_2**2)  ### effective sigma of sum of two gaussians with common
         self.window = num_of_sigma_window*sigma_eff
-        self.distance_to_sdb = num_of_sigma_to_sdb*sigma_eff
+        self.distance_to_sdb = num_of_sigma_to_sdr*sigma_eff
         return self
 
     def get_regions(self):
-        """Reduce instance dataset with SR and SdR cuts
+        """Produce datasets with SR and SdR cuts defined by set_regions() method
 
         Parameters
         ---------
@@ -77,8 +89,8 @@ class DataExplorer(StatTools):
         return data_sig, data_sideband
 
     def plot_regions(self, frame, y_sdb_left=0, y_sr=0, y_sdb_right=0, line_width=4):
-        """Add vertical lines illustrating SR and SdR regions to the frame.
-        NB: SR=|m-mean|<window;
+        """Add vertical lines illustrating SR and SdR regions (defined by set_regions() method) to the frame.
+        NB: by default, SR=|m-mean|<window;
             SdR=|m-mean|>window+distance_to_sdb &
                 |m-mean|<2*window+distance_to_sdb
 
@@ -96,7 +108,7 @@ class DataExplorer(StatTools):
         Returns
         -------
         frame: RooPlot
-            intial frame with the lines added  (requires further drawing on the canvas)
+            initial frame with the lines added  (requires further drawing on the canvas)
         """
         mean = self.model.getParameters(self.data).find(f'mean_{self.label}').getVal()
         line_ll_sdb = (ROOT.TLine(mean - 2.*self.window - self.distance_to_sdb, 0, mean - 2.*self.window - self.distance_to_sdb, y_sdb_left),  ROOT.kBlue-8)
@@ -118,16 +130,17 @@ class DataExplorer(StatTools):
 
         Parameters
         ----------
-        is_sum_w2: bool, optional (default=-1: True if data is weighed and False otherwise)
-            correct Hessian with data weights matrix to get correct errors, see RooFit tutorial rf403__weightedevts
+        is_sum_w2: bool, optional (default=-1: True if data is weighted and False otherwise)
+            correct Hessian with data weights matrix to get correct errors, see RooFit tutorial rf403__weightedevts for details
         fix: list of RooRealVar, optional (default=[])
-            variables from this list will be fixed in the fit and then released
+            variables from this list will be fixed throughout all the fit and afterwards released
         fix_float: list of RooRealVar, optional (default=[])
-            variables from this list will be firstly setConstant(1) in the fit and then setConstant(0)
+            variables from this list during the fit will be firstly setConstant(1) and then setConstant(0)
 
         Returns
         -------
         fit_results: RooFitResult
+            results of the fit, can be printed with the Print() method
         """
         if is_sum_w2 != -1:
             assert (type(is_sum_w2) is bool), 'is_sum_w2 is not boolean, set it to either True or False'
@@ -164,13 +177,14 @@ class DataExplorer(StatTools):
         fix_float: list of RooRealVar, optional (default=[])
             variables from this list will be firstly setConstant(1) in the fit and then setConstant(0)
         minos: bool
-            whether to calculate MINOS errors for POI
+            whether to calculate MINOS errors for minos_poi parameter of interest
         minos_poi: RooRealVar
             parameter of interest for which to calculate MINOS errors
 
         Returns
         -------
-        self, object
+        fit_results: RooFitResult
+            results of the fit, can be printed with the Print() method
         """
         init_nbins = self.var.numBins()
         if nbins != -1:
@@ -201,9 +215,18 @@ class DataExplorer(StatTools):
             print('\n\n\nMINOS DONE, see the results above\n\n\n')
         return m.save()
 
+    def set_plot_labels(self):
+        """Set plot labels for the model's parameters to their titles from definition.
+        """
+        iter = self.model.getVariables().iterator()
+        iter_var = iter.Next()
+        while iter_var:
+            iter_var.setPlotLabel(iter_var.GetTitle())
+            iter_var = iter.Next()
+
     def plot_on_frame(self, title=' ', plot_params=-1, nbins=-1, **kwargs):
         """Plot the instance model with all its components and data on the RooPlot frame
-        NB: signal component's name should starts with 'sig', background - with 'bkgr'
+        NB: for correct plotting signal component's label should start with 'sig', background - with 'bkgr'
 
         Parameters
         ----------
@@ -226,6 +249,7 @@ class DataExplorer(StatTools):
             var_nbins = nbins
         var_left  = self.var.getMin();
         var_right = self.var.getMax();
+        self.set_plot_labels()
 
         frame = ROOT.RooPlot(" ", title, self.var, var_left, var_right, var_nbins)  # frame.getAttText().SetTextSize(0.053)
         self.data.plotOn(frame, RF.DataError(ROOT.RooAbsData.Auto))
