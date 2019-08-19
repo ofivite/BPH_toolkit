@@ -10,7 +10,7 @@ chi2_results = {}
 m = ROOT.RooRealVar("m", "mass [GeV]", 5.2, 5.3)
 m.setBins(50)
 
-# Parameters (you can tune them)
+# Parameters
 exp_par = ROOT.RooRealVar("exp_par", "#lambda", -5., -50, 1.)
 mean = ROOT.RooRealVar("mean", "mean [GeV]", 5.25, 5.2, 5.3)
 sigma = ROOT.RooRealVar("sigma", "#sigma [GeV]", 0.005, 0.001, 0.05)
@@ -29,20 +29,12 @@ model = ROOT.RooAddPdf('model', 'model', ROOT.RooArgList(sig, bkgr), ROOT.RooArg
 data = model_gen.generate(ROOT.RooArgSet(m), N_GEN)
 data = data.reduce(f'{m.GetName()} > {m.getMin()} && {m.GetName()} < {m.getMax()}')
 
-# Study and plot'em all
+# Fit and plot'em all
 DE = DataExplorer(label='test', data=data, model=model)
-fit_results = DE.fit()
+fit_results = DE.fit(minos=True)
 c = ROOT.TCanvas()
 frame = DE.plot_on_frame()
 frame.Draw()
-
-# Calculate statistical significance of signal observation
-w = DE.write_to_workspace(poi=N_sig, nuisances= [exp_par, mean, sigma, N_bkgr])
-asympt_rrr = DE.asympt_signif(w=w)
-# DE.asympt_signif_ll(w=w) # another method
-chi2_results = list(DE.chi2_test(pvalue_threshold=0.05, nbins=-1).values())[0]
-print(f'\n\nchi2: {chi2_results[0]}\nndf: {chi2_results[1]}\np-value of chi2 test: {chi2_results[2]}\n')
-print(f'fit status: {DE.fit_status}, chi2_test status: {DE.chi2_test_status}')
 
 # Make pull distribution for the fit
 c_pull = ROOT.TCanvas()
@@ -63,7 +55,20 @@ frame_err.Draw()
 c_pull = ROOT.TCanvas()
 frame_pull.Draw()
 
+# Export data and model to workspace
+w = DE.write_to_workspace(poi=N_sig, nuisances= [exp_par, mean, sigma, N_bkgr])
+
+# Calculate statistical significance of signal observation with asymptotic approximation
+asympt_rrr = DE.asympt_signif(w=w)
+# DE.asympt_signif_ll(w=w) # another method
+
+# Do chi^2 goodness-of-fit test and print fit and test status
+chi2_results = list(DE.chi2_test(pvalue_threshold=0.05, nbins=-1).values())[0]
+print(f'\n\nchi2: {chi2_results[0]}\nndf: {chi2_results[1]}\np-value of chi2 test: {chi2_results[2]}\n')
+print(f'fit status: {DE.fit_status}, chi2_test status: {DE.chi2_test_status}')
+
 # Calculate signal significance with toys
+# Note that p-value might be zero if bkgr hypo is very unlikely since it might require lots of toys to get to the observed value of test statistic.
 c_toy_signif = ROOT.TCanvas()
 frame_toy_signif, _ = DE.toy_signif(w, n_toys_null = 100, n_toys_alt=10)
 frame_toy_signif.Draw()

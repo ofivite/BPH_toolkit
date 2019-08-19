@@ -5,8 +5,6 @@
 # private/protected items
 # more tests?
 # minos to unbinned fit method
-# method for reducing data + making self.data private
-# proper plot labelling of params in the legend
 # make it an open source project? (pip repo, dependencies, etc.)
 # Kolmogorov-Smirnov test
 
@@ -124,7 +122,7 @@ class DataExplorer(StatTools):
             frame.addObject(line)
         return frame
 
-    def fit(self, is_sum_w2=-1, fix=[], fix_float=[]):
+    def fit(self, is_sum_w2=-1, fix=[], fix_float=[], minos=False):
         """Fit instance data with instance model using fitTo() method. Extended or not is infered from the model. Set is_fitted=True.
         NB: the corresponding model parameters will be updated outside of the class instance after executing!
 
@@ -136,6 +134,8 @@ class DataExplorer(StatTools):
             variables from this list will be fixed throughout all the fit and afterwards released
         fix_float: list of RooRealVar, optional (default=[])
             variables from this list during the fit will be firstly setConstant(1) and then setConstant(0)
+        minos: bool
+            whether to calculate MINOS errors (will be done for all the parameters)
 
         Returns
         -------
@@ -156,13 +156,19 @@ class DataExplorer(StatTools):
             param.setConstant(0)
         self.model.fitTo(self.data, RF.Extended(is_extended), RF.SumW2Error(is_sum_w2))
         fit_results = self.model.fitTo(self.data, RF.Extended(is_extended), RF.SumW2Error(is_sum_w2), RF.Save())
-        fit_results.Print()
+        if minos:
+            if self.data.isWeighted():
+                interactivity_yn('The data is weighted and MINOS should not be used. Sure you want to proceed?')
+            fit_results = self.model.fitTo(self.data, RF.Extended(is_extended), RF.SumW2Error(is_sum_w2), RF.Minos(), RF.Save())
+            print('\n\n\nMINOS DONE, see the NEGATIVE/POSITIVE columns above\n\n\n')
+
+        if is_sum_w2:
+            print('\n\n' + 70*'~' + '\n' + ' '*30 + 'BEWARE!\n\nYou set is_sum_w2=True, which means that the data might be weighted.\nErrors might differ between two printed tables!\nThe last one from RooFitResult.Print() should be correct.\nYou might also want to consider chi2_fit() method as a cross-check,\nas in principle, that should give correct and more reliable results\n(but the normalization in this case will likely not be preserved \nand results might be unstable)\n' + 70*'~' + '\n\n')
         for param in fix:
             param.setConstant(0)
         self.is_fitted = True
         self.fit_status = fit_results.status()
-        if is_sum_w2:
-            print('\n\n' + 70*'~' + '\n' + ' '*30 + 'BEWARE!\n\nYou set is_sum_w2=True, which means that the data might be weighted.\nErrors might differ between two printed tables!\nThe last one from RooFitResult.Print() should be correct.\nYou might also want to consider chi2_fit() method as a cross-check,\nas in principle, that should give correct and more reliable results\n(but the normalization in this case will likely not be preserved \nand results might be unstable)\n' + 70*'~' + '\n\n')
+        fit_results.Print()
         return fit_results
 
     def chi2_fit(self, nbins=-1, fix_float=[], minos=False, minos_poi=None):

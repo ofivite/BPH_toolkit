@@ -155,54 +155,6 @@ class StatTools:
             c.SaveAs(f'{save_folder}/{save_prefix}.pdf')
         return plot_hypo_test, fqResult
 
-    def toy_tstat(self, n_toys=1000, seed=333, save=False):
-        ROOT.RooRandom.randomGenerator().SetSeed(seed)
-        t_list = []
-        #
-        self.poi.setVal(0); self.poi.setConstant(1);
-        self.chi2_fit() ### assuming the data to be RooDataHist()
-        data_TH1 = self.data.createHistogram(self.var.GetName())
-        max_error = max([data_TH1.GetBinError(i) for i in range(1, data_TH1.GetNbinsX() + 1)])
-
-        for i_toy in range(n_toys):
-            self.poi.setVal(0); self.poi.setConstant(1);
-            toy_data = self.model.generate(ROOT.RooArgSet(self.var), self.data.sumEntries())
-            toy_roohist = ROOT.RooDataHist('toy_TH1', 'toy_TH1', ROOT.RooArgSet(self.var), toy_data)
-            toy_TH1 = toy_roohist.createHistogram(self.var.GetName())
-            for i in range(1, toy_TH1.GetNbinsX()+1):
-                toy_TH1.SetBinError(i, max_error)
-            toy_hist = ROOT.RooDataHist('toy_hist', 'toy_hist', ROOT.RooArgList(self.var), RF.Import(toy_TH1))
-            #
-            self.chi2_fit(data=toy_hist)
-            chi2_null = ROOT.RooChi2Var("chi2_null","chi2_null", self.model, toy_hist, RF.Extended(False), RF.DataError(ROOT.RooAbsData.Auto))
-            chi2_null = chi2_null.getVal()
-            #
-            if save:
-                c_null = ROOT.TCanvas("c_null", "c_null", 800, 600);
-                frame_null = self.var.frame()
-                toy_hist.plotOn(frame_null, RF.DataError(ROOT.RooAbsData.SumW2))
-                self.model.plotOn(frame_null)
-                frame_null.Draw()
-                c_null.SaveAs(f'./tnull_toys/null_{i_toy}.pdf')
-            #
-            self.poi.setConstant(0);
-            self.chi2_fit(data=toy_hist)
-            chi2_sb = ROOT.RooChi2Var("chi2_sb","chi2_sb", self.model, toy_hist, RF.Extended(False), RF.DataError(ROOT.RooAbsData.Auto))
-            chi2_sb = chi2_sb.getVal()
-            t_list.append([chi2_null - chi2_sb, chi2_null, chi2_sb])
-
-        if save:
-            c_sb = ROOT.TCanvas("c_sb", "c_sb", 800, 600);
-            frame_sb = self.var.frame()
-            toy_hist.plotOn(frame_sb, RF.DataError(ROOT.RooAbsData.SumW2))
-            self.model.plotOn(frame_sb)
-            frame_sb.Draw()
-            c_sb.SaveAs(f'./tnull_toys/sb_{i_toy}.pdf')
-
-        df = DataFrame(t_list, columns=['t', 'chi2_null', 'chi2_sb'])
-        df.to_pickle('t_.pkl')
-        return df
-
     def plot_ll(self, poi, nbins=100, poi_min=-1, poi_max=-1, save=False, save_folder='.', save_prefix='pll'):
         """Plot the nominal and profiled likelihoods for the instance's data and model for the provided parameter of interest
 
