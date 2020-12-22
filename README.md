@@ -13,7 +13,3 @@ ROOT: 6.14/04
 RooFit: 3.60  
 python: 3.6.8  
 scipy: 1.2.0
-
----
-
-If you have any questions or want to contribute, please do not hesitate to contact me via Telegram: [@yaourtpourtoi](https://t.me/yaourtpourtoi) or e-mail: <oleg.filatov@cern.ch>
